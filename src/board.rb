@@ -1,4 +1,4 @@
-require 'minigl'
+require_relative 'character'
 
 include MiniGL
 
@@ -12,16 +12,17 @@ class Board
     File.open("#{Res.prefix}board/#{id}") do |f|
       f.each_line.with_index do |line, j|
         line = line.chomp
-        if j == 0
-          p = line.split(',')
-          @width = p[0].to_i
-          @height = p[1].to_i
+        case j
+        when 0
+          @width, @height = line.split(',').map(&:to_i)
           @tiles = Array.new(@width) do
             Array.new(@height)
           end
+        when 1
+          @start_point = line.split(',').map(&:to_i)
         else
           (0...line.size).each do |i|
-            @tiles[i][j - 1] = line[i] == '.' ? -1 : 0
+            @tiles[i][j - 2] = line[i] == '.' ? -1 : 0
           end
         end
       end
@@ -75,6 +76,16 @@ class Board
 
     @margin_x = (G.window.width - @tiles.size * @floor_w) / 2
     @margin_y = (G.window.height - @tiles[0].size * @floor_h) / 2
+
+    @characters = []
+  end
+
+  def add_character(name)
+    @characters << Character.new(name, @start_point[0] * @floor_w + @margin_x, @start_point[1] * @floor_h + @margin_y)
+  end
+
+  def update
+    @characters.each(&:update)
   end
 
   def draw
@@ -90,8 +101,15 @@ class Board
 
     @tiles.each_with_index do |col, i|
       col.each_with_index do |tile, j|
-        @floor[tile].draw(i * @floor_w + @margin_x, j * @floor_h + @margin_y, 0) if tile >= 0
+        next unless tile >= 0
+
+        x = i * @floor_w + @margin_x
+        y = j * @floor_h + @margin_y
+        @floor[tile].draw(x + 8, y + 8, 1, 1, 1, 0x66000000)
+        @floor[tile].draw(x, y, 2)
       end
     end
+
+    @characters.each(&:draw)
   end
 end

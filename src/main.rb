@@ -8,13 +8,16 @@ class MyGameWindow < GameWindow
     w, h = `xrandr`.scan(/current (\d+) x (\d+)/).flatten.map(&:to_i)
     super(w, h)
 
-    Res.prefix = File.expand_path(__FILE__).split('/')[0..-3].join('/') + '/data'
+    Res.prefix = "#{File.expand_path(__FILE__).split('/')[0..-3].join('/')}/data"
     @board = Board.new(1)
+    @board.add_character('cat')
   end
 
   def update
     KB.update
     close if KB.key_pressed?(Gosu::KB_ESCAPE)
+
+    @board.update
   end
 
   def draw
