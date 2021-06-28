@@ -1,8 +1,13 @@
 include MiniGL
 
-class Character < Sprite
+class Character < GameObject
+  IMAGE_GAPS = {
+    'cat' => Vector.new(0, 0),
+    'rabbit' => Vector.new(0, -14)
+  }
+
   def initialize(name, x, y)
-    super(x, y, "char_#{name}", 2, 1)
+    super(x, y, 128, 128, "char_#{name}", IMAGE_GAPS[name], 2, 1)
   end
 
   def update
