@@ -1,3 +1,4 @@
+require 'set'
 require_relative 'character'
 
 include MiniGL
@@ -11,18 +12,38 @@ class Tile
     [[-32, -32, 0], [32, -32, 1], [0, 32, 2]]
   ]
 
+  attr_reader :col, :row, :directions
   attr_accessor :floor_type
   
-  def initialize(i, j, floor_type)
+  def initialize(i, j, floor_type, dir_mask)
+    @col = i
+    @row = j
     @center = Vector.new(i * TILE_SIZE + TILE_SIZE / 2, j * TILE_SIZE + TILE_SIZE / 2)
     @floor_type = floor_type
-    @chars = []
+    @directions = Set.new
+    @directions.add(:up) if (dir_mask & 1) > 0
+    @directions.add(:rt) if (dir_mask & 2) > 0
+    @directions.add(:dn) if (dir_mask & 4) > 0
+    @directions.add(:lf) if (dir_mask & 8) > 0
+    @characters = []
   end
   
   def add_char(char, start = false)
-    offsets = CHAR_OFFSETS[@chars.size]
-    @chars << char
-    @chars.each_with_index do |c, i|
+    @characters << char
+    char.tile = self
+    reposition_chars(start)
+  end
+
+  def remove_char(char)
+    @characters.delete(char)
+    reposition_chars
+  end
+
+  private
+
+  def reposition_chars(start = false)
+    offsets = CHAR_OFFSETS[@characters.size - 1]
+    @characters.each_with_index do |c, i|
       c.send(start ? :set_position : :set_target, @center.x + offsets[i][0], @center.y + offsets[i][1])
       c.z_offset = offsets[i][2]
     end
@@ -47,7 +68,7 @@ class Board
           @start_point = line.split(',').map(&:to_i)
         else
           (0...line.size).each do |i|
-            @tiles[i][j - 2] = Tile.new(i, j - 2,0) if line[i] != '.'
+            @tiles[i][j - 2] = Tile.new(i, j - 2,0, line[i].to_i) if line[i] != '.'
           end
         end
       end
@@ -56,6 +77,7 @@ class Board
     @map = Map.new(TILE_SIZE, TILE_SIZE, @width, @height, G.window.width, G.window.height, false, false)
     map_size = @map.get_absolute_size
     @map.set_camera((map_size.x - G.window.width) / 2, (map_size.y - G.window.height) / 2)
+
     @tiles.each_with_index do |col, i|
       col.each_with_index do |tile, j|
         next unless tile
@@ -102,10 +124,8 @@ class Board
       end
     end
 
-    # @margin_x = (G.window.width - @tiles.size * TILE_SIZE) / 2
-    # @margin_y = (G.window.height - @tiles[0].size * TILE_SIZE) / 2
-
     @characters = []
+    @char_index = 0
   end
 
   def add_character(name)
@@ -115,6 +135,38 @@ class Board
 
   def update
     @characters.each(&:update)
+
+    cur_char = @characters[@char_index]
+    return if cur_char.moving?
+
+    tile = cur_char.tile
+    if tile.directions.empty?
+      @char_index += 1
+      @char_index = 0 if @char_index >= @characters.size
+    elsif tile.directions.size == 1
+      if tile.directions.include?(:up)
+        move_char(cur_char, @tiles[tile.col][tile.row - 1])
+      elsif tile.directions.include?(:rt)
+        move_char(cur_char, @tiles[tile.col + 1][tile.row])
+      elsif tile.directions.include?(:dn)
+        move_char(cur_char, @tiles[tile.col][tile.row + 1])
+      else # :lf
+        move_char(cur_char, @tiles[tile.col - 1][tile.row])
+      end
+    elsif tile.directions.include?(:up) && KB.key_pressed?(Gosu::KB_UP)
+      move_char(cur_char, @tiles[tile.col][tile.row - 1])
+    elsif tile.directions.include?(:rt) && KB.key_pressed?(Gosu::KB_RIGHT)
+      move_char(cur_char, @tiles[tile.col + 1][tile.row])
+    elsif tile.directions.include?(:dn) && KB.key_pressed?(Gosu::KB_DOWN)
+      move_char(cur_char, @tiles[tile.col][tile.row + 1])
+    elsif tile.directions.include?(:lf) && KB.key_pressed?(Gosu::KB_LEFT)
+      move_char(cur_char, @tiles[tile.col - 1][tile.row])
+    end
+  end
+
+  def move_char(char, to)
+    char.tile.remove_char(char)
+    to.add_char(char)
   end
 
   def draw

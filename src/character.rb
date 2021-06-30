@@ -9,6 +9,7 @@ class Character < GameObject
   SPEED = 3
 
   attr_writer :z_offset
+  attr_accessor :tile
 
   def initialize(name)
     super(0, 0, 128, 128, "char_#{name}", IMAGE_GAPS[name], 2, 1)
@@ -30,6 +31,10 @@ class Character < GameObject
 
   def set_target(x, y)
     @target = Vector.new(x - @w / 2, y - @h)
+  end
+
+  def moving?
+    @speed.x != 0 || @speed.y != 0
   end
 
   def draw(map)
