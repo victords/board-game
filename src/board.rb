@@ -4,6 +4,7 @@ require_relative 'character'
 include MiniGL
 
 TILE_SIZE = 128
+HALF_TILE = 64
 
 class Tile
   CHAR_OFFSETS = [
@@ -13,19 +14,57 @@ class Tile
   ]
 
   attr_reader :col, :row, :directions
-  attr_accessor :floor_type
   
-  def initialize(i, j, floor_type, dir_mask)
+  def initialize(i, j, dir_mask)
     @col = i
     @row = j
     @center = Vector.new(i * TILE_SIZE + TILE_SIZE / 2, j * TILE_SIZE + TILE_SIZE / 2)
-    @floor_type = floor_type
     @directions = Set.new
     @directions.add(:up) if (dir_mask & 1) > 0
     @directions.add(:rt) if (dir_mask & 2) > 0
     @directions.add(:dn) if (dir_mask & 4) > 0
     @directions.add(:lf) if (dir_mask & 8) > 0
     @characters = []
+  end
+
+  def set_floor_type(board_id, up, rt, dn, lf)
+    floor_type =
+      if up
+        if rt
+          if dn
+            0
+          else
+            7
+          end
+        elsif dn
+          0
+        elsif lf
+          6
+        else
+          3
+        end
+      elsif rt
+        if dn
+          if lf
+            0
+          else
+            8
+          end
+        elsif lf
+          0
+        else
+          4
+        end
+      elsif dn
+        if lf
+          5
+        else
+          1
+        end
+      else
+        2
+      end
+    @img = Res.imgs("board_floor#{board_id}", 3, 3)[floor_type]
   end
   
   def add_char(char, start = false)
@@ -37,6 +76,25 @@ class Tile
   def remove_char(char)
     @characters.delete(char)
     reposition_chars
+  end
+
+  def draw(map)
+    x = @col * TILE_SIZE - map.cam.x
+    y = @row * TILE_SIZE - map.cam.y
+    @img.draw(x + 8, y + 8, 1, 1, 1, 0x33000000)
+    @img.draw(x, y, 2)
+    G.window.draw_triangle(x + HALF_TILE, y - 4, 0xffffff00,
+                           x + HALF_TILE - 8, y + 4, 0xffffff00,
+                           x + HALF_TILE + 8, y + 4, 0xffffff00, 3) if @directions.include?(:up)
+    G.window.draw_triangle(x + TILE_SIZE + 4, y + HALF_TILE, 0xffffff00,
+                           x + TILE_SIZE - 4, y + HALF_TILE - 8, 0xffffff00,
+                           x + TILE_SIZE - 4, y + HALF_TILE + 8, 0xffffff00, 3) if @directions.include?(:rt)
+    G.window.draw_triangle(x + HALF_TILE, y + TILE_SIZE + 4, 0xffffff00,
+                           x + HALF_TILE - 8, y + TILE_SIZE - 4, 0xffffff00,
+                           x + HALF_TILE + 8, y + TILE_SIZE - 4, 0xffffff00, 3) if @directions.include?(:dn)
+    G.window.draw_triangle(x - 4, y + HALF_TILE, 0xffffff00,
+                           x + 4, y + HALF_TILE - 8, 0xffffff00,
+                           x + 4, y + HALF_TILE + 8, 0xffffff00, 3) if @directions.include?(:lf)
   end
 
   private
@@ -53,7 +111,6 @@ end
 class Board
   def initialize(id)
     @bg = Res.img("board_bg#{id}")
-    @floor = Res.imgs("board_floor#{id}", 3, 3)
     @die = Sprite.new(40, 40, :ui_die, 2, 3)
 
     File.open("#{Res.prefix}board/#{id}") do |f|
@@ -69,7 +126,7 @@ class Board
           @start_point = line.split(',').map(&:to_i)
         else
           (0...line.size).each do |i|
-            @tiles[i][j - 2] = Tile.new(i, j - 2,0, line[i].to_i) if line[i] != '.'
+            @tiles[i][j - 2] = Tile.new(i, j - 2, line[i].to_i(16)) if line[i] != '.'
           end
         end
       end
@@ -87,41 +144,7 @@ class Board
         rt = i < @tiles.size - 1 && @tiles[i + 1][j]
         dn = j < @tiles[0].size - 1 && @tiles[i][j + 1]
         lf = i > 0 && @tiles[i - 1][j]
-        @tiles[i][j].floor_type = if up
-                                    if rt
-                                      if dn
-                                        0
-                                      else
-                                        7
-                                      end
-                                    elsif dn
-                                      0
-                                    elsif lf
-                                      6
-                                    else
-                                      3
-                                    end
-                                  elsif rt
-                                    if dn
-                                      if lf
-                                        0
-                                      else
-                                        8
-                                      end
-                                    elsif lf
-                                      0
-                                    else
-                                      4
-                                    end
-                                  elsif dn
-                                    if lf
-                                      5
-                                    else
-                                      1
-                                    end
-                                  else
-                                    2
-                                  end
+        @tiles[i][j].set_floor_type(id, up, rt, dn, lf)
       end
     end
 
@@ -205,12 +228,7 @@ class Board
 
     @tiles.each_with_index do |col, i|
       col.each_with_index do |tile, j|
-        next unless tile
-
-        x = i * TILE_SIZE - @map.cam.x
-        y = j * TILE_SIZE - @map.cam.y
-        @floor[tile.floor_type].draw(x + 8, y + 8, 1, 1, 1, 0x66000000)
-        @floor[tile.floor_type].draw(x, y, 2)
+        tile&.draw(@map)
       end
     end
 
