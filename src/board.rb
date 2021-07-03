@@ -54,6 +54,7 @@ class Board
   def initialize(id)
     @bg = Res.img("board_bg#{id}")
     @floor = Res.imgs("board_floor#{id}", 3, 3)
+    @die = Sprite.new(40, 40, :ui_die, 2, 3)
 
     File.open("#{Res.prefix}board/#{id}") do |f|
       f.each_line.with_index do |line, j|
@@ -126,6 +127,7 @@ class Board
 
     @characters = []
     @char_index = 0
+    @state = :rolling
   end
 
   def add_character(name)
@@ -136,37 +138,58 @@ class Board
   def update
     @characters.each(&:update)
 
-    cur_char = @characters[@char_index]
-    return if cur_char.moving?
+    case @state
+    when :rolling
+      @die.animate([0, 1, 2, 3, 4, 5], 5)
+      if KB.key_pressed?(Gosu::KB_SPACE)
+        @moves = @die.img_index + 1
+        @state = :moving
+      end
+    when :moving
+      cur_char = @characters[@char_index]
+      return if cur_char.moving?
 
-    tile = cur_char.tile
-    if tile.directions.empty?
-      @char_index += 1
-      @char_index = 0 if @char_index >= @characters.size
-    elsif tile.directions.size == 1
-      if tile.directions.include?(:up)
+      if @moves == 0
+        change_turn
+        return
+      end
+
+      tile = cur_char.tile
+      if tile.directions.empty?
+        change_turn
+      elsif tile.directions.size == 1
+        if tile.directions.include?(:up)
+          move_char(cur_char, @tiles[tile.col][tile.row - 1])
+        elsif tile.directions.include?(:rt)
+          move_char(cur_char, @tiles[tile.col + 1][tile.row])
+        elsif tile.directions.include?(:dn)
+          move_char(cur_char, @tiles[tile.col][tile.row + 1])
+        else # :lf
+          move_char(cur_char, @tiles[tile.col - 1][tile.row])
+        end
+      elsif tile.directions.include?(:up) && KB.key_pressed?(Gosu::KB_UP)
         move_char(cur_char, @tiles[tile.col][tile.row - 1])
-      elsif tile.directions.include?(:rt)
+      elsif tile.directions.include?(:rt) && KB.key_pressed?(Gosu::KB_RIGHT)
         move_char(cur_char, @tiles[tile.col + 1][tile.row])
-      elsif tile.directions.include?(:dn)
+      elsif tile.directions.include?(:dn) && KB.key_pressed?(Gosu::KB_DOWN)
         move_char(cur_char, @tiles[tile.col][tile.row + 1])
-      else # :lf
+      elsif tile.directions.include?(:lf) && KB.key_pressed?(Gosu::KB_LEFT)
         move_char(cur_char, @tiles[tile.col - 1][tile.row])
       end
-    elsif tile.directions.include?(:up) && KB.key_pressed?(Gosu::KB_UP)
-      move_char(cur_char, @tiles[tile.col][tile.row - 1])
-    elsif tile.directions.include?(:rt) && KB.key_pressed?(Gosu::KB_RIGHT)
-      move_char(cur_char, @tiles[tile.col + 1][tile.row])
-    elsif tile.directions.include?(:dn) && KB.key_pressed?(Gosu::KB_DOWN)
-      move_char(cur_char, @tiles[tile.col][tile.row + 1])
-    elsif tile.directions.include?(:lf) && KB.key_pressed?(Gosu::KB_LEFT)
-      move_char(cur_char, @tiles[tile.col - 1][tile.row])
     end
+  end
+
+  def change_turn
+    @char_index += 1
+    @char_index = 0 if @char_index >= @characters.size
+    @state = :rolling
+    @die.set_animation(0)
   end
 
   def move_char(char, to)
     char.tile.remove_char(char)
     to.add_char(char)
+    @moves -= 1
   end
 
   def draw
@@ -194,5 +217,7 @@ class Board
     @characters.each do |c|
       c.draw(@map)
     end
+
+    @die.draw(nil, 1, 1, 255, 0xffffff, nil, nil, 100)
   end
 end

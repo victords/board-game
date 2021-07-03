@@ -6,7 +6,7 @@ class Character < GameObject
     'rabbit' => Vector.new(0, -14)
   }.freeze
 
-  SPEED = 3
+  SPEED = 4
 
   attr_writer :z_offset
   attr_accessor :tile
