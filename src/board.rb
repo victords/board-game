@@ -29,40 +29,15 @@ class Tile
 
   def set_floor_type(board_id, up, rt, dn, lf)
     floor_type =
-      if up
-        if rt
-          if dn
-            0
-          else
-            7
-          end
-        elsif dn
-          0
-        elsif lf
-          6
-        else
-          3
-        end
-      elsif rt
-        if dn
-          if lf
-            0
-          else
-            8
-          end
-        elsif lf
-          0
-        else
-          4
-        end
-      elsif dn
-        if lf
-          5
-        else
-          1
-        end
-      else
-        2
+      if up && dn || rt && lf then 0
+      elsif dn && !rt && !lf then 1
+      elsif lf && !up && !dn then 2
+      elsif up && !rt && !lf then 3
+      elsif rt && !up && !dn then 4
+      elsif dn && lf then 5
+      elsif up && lf then 6
+      elsif up && rt then 7
+      else 8
       end
     @img = Res.imgs("board_floor#{board_id}", 3, 3)[floor_type]
   end
