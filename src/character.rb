@@ -38,6 +38,6 @@ class Character < GameObject
   end
 
   def draw(map)
-    super(map, 1, 1, 255, 0xffffff, nil, nil, 4 + @z_offset)
+    super(map, 1, 1, 255, 0xffffff, nil, nil, 9 + @z_offset)
   end
 end

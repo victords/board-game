@@ -7,23 +7,37 @@ TILE_SIZE = 128
 HALF_TILE = 64
 
 class Tile
-  CHAR_OFFSETS = [
-    [[0, 0, 0]],
-    [[-32, -32, 0], [32, 32, 1]],
-    [[-32, -32, 0], [32, -32, 1], [0, 32, 2]]
-  ]
+  ELEMENT_OFFSETS = [
+    [[0, 0]],
+    [[-21, -21], [21, 21, 1]],
+    [[-27, -23], [27, -23], [0, 23, 1]],
+    [[-30, -30], [30, -30], [-30, 30, 1], [30, 30, 1]],
+    [[-30, -30], [30, -30], [0, 0, 1], [-30, 30, 2], [30, 30, 2]],
+  ].freeze
 
   attr_reader :col, :row, :directions
   
-  def initialize(i, j, dir_mask)
+  def initialize(i, j, content)
     @col = i
     @row = j
     @center = Vector.new(i * TILE_SIZE + TILE_SIZE / 2, j * TILE_SIZE + TILE_SIZE / 2)
+
+    dir_mask = content[0].to_i(16)
     @directions = Set.new
     @directions.add(:up) if (dir_mask & 1) > 0
     @directions.add(:rt) if (dir_mask & 2) > 0
     @directions.add(:dn) if (dir_mask & 4) > 0
     @directions.add(:lf) if (dir_mask & 8) > 0
+
+    gem_count = content[1].to_i
+    gem_img = Res.imgs(:board_smallGem, 3, 1)[0]
+    offsets = ELEMENT_OFFSETS[gem_count - 1]
+    @gems = []
+    (0...gem_count).each do |i|
+      x = @center.x + offsets[i][0] - gem_img.width / 2
+      y = @center.y + offsets[i][1] - gem_img.height / 2
+      @gems << Sprite.new(x, y, :board_smallGem, 3, 1)
+    end
     @characters = []
   end
 
@@ -40,6 +54,10 @@ class Tile
       else 8
       end
     @img = Res.imgs("board_floor#{board_id}", 3, 3)[floor_type]
+    @gem_tint = case board_id
+                when 1 then 0xff5050
+                else        0xffffff
+                end
   end
   
   def add_char(char, start = false)
@@ -51,6 +69,12 @@ class Tile
   def remove_char(char)
     @characters.delete(char)
     reposition_chars
+  end
+
+  def update
+    @gems.each do |gem|
+      gem.animate([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 1], 7)
+    end
   end
 
   def draw(map)
@@ -70,15 +94,19 @@ class Tile
     G.window.draw_triangle(x - 4, y + HALF_TILE, 0xffffff00,
                            x + 4, y + HALF_TILE - 8, 0xffffff00,
                            x + 4, y + HALF_TILE + 8, 0xffffff00, 3) if @directions.include?(:lf)
+
+    @gems.each_with_index do |gem, i|
+      gem.draw(map, 1, 1, 255, @gem_tint, nil, nil, 4 + (ELEMENT_OFFSETS[@gems.size - 1][i][2] || 0))
+    end
   end
 
   private
 
   def reposition_chars(start = false)
-    offsets = CHAR_OFFSETS[@characters.size - 1]
+    offsets = ELEMENT_OFFSETS[@characters.size - 1]
     @characters.each_with_index do |c, i|
       c.send(start ? :set_position : :set_target, @center.x + offsets[i][0], @center.y + offsets[i][1])
-      c.z_offset = offsets[i][2]
+      c.z_offset = offsets[i][2] || 0
     end
   end
 end
@@ -100,8 +128,9 @@ class Board
         when 1
           @start_point = line.split(',').map(&:to_i)
         else
-          (0...line.size).each do |i|
-            @tiles[i][j - 2] = Tile.new(i, j - 2, line[i].to_i(16)) if line[i] != '.'
+          (0...line.size / 2).each do |i|
+            row = j - 2
+            @tiles[i][row] = Tile.new(i, row, line[2*i..2*i+1]) if line[2*i] != '.'
           end
         end
       end
@@ -135,6 +164,11 @@ class Board
 
   def update
     @characters.each(&:update)
+    @tiles.each do |col|
+      col.each do |tile|
+        tile&.update
+      end
+    end
 
     case @state
     when :rolling
@@ -201,8 +235,8 @@ class Board
       x += @bg.width
     end
 
-    @tiles.each_with_index do |col, i|
-      col.each_with_index do |tile, j|
+    @tiles.each do |col|
+      col.each do |tile|
         tile&.draw(@map)
       end
     end
