@@ -9,10 +9,11 @@ class Character < GameObject
   SPEED = 4
 
   attr_writer :z_offset
-  attr_accessor :tile
+  attr_accessor :tile, :score
 
   def initialize(name)
     super(0, 0, 128, 128, "char_#{name}", IMAGE_GAPS[name], 2, 1)
+    @score = 0
     @z_offset = 0
   end
 

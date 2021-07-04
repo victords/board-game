@@ -63,6 +63,7 @@ class Tile
   def add_char(char, start = false)
     @characters << char
     char.tile = self
+    char.score += @gems.size
     reposition_chars(start)
   end
 
@@ -115,6 +116,7 @@ class Board
   def initialize(id)
     @bg = Res.img("board_bg#{id}")
     @die = Sprite.new(40, 40, :ui_die, 2, 3)
+    @font = Res.font(:arialRounded, 36)
 
     File.open("#{Res.prefix}board/#{id}") do |f|
       f.each_line.with_index do |line, j|
@@ -241,10 +243,12 @@ class Board
       end
     end
 
-    @characters.each do |c|
+    @characters.each_with_index do |c, i|
       c.draw(@map)
+      @font.draw_markup(c.score.to_s, 40 + i * 80, G.window.height - 76, 100, 1, 1, 0xff000000)
     end
 
     @die.draw(nil, 1, 1, 255, 0xffffff, nil, nil, 100)
+    @font.draw_markup('Score', 40, G.window.height - 116, 100, 1, 1, 0xff000000)
   end
 end
