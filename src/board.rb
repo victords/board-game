@@ -14,13 +14,14 @@ class Tile
     [[-30, -30], [30, -30], [-30, 30, 1], [30, 30, 1]],
     [[-30, -30], [30, -30], [0, 0, 1], [-30, 30, 2], [30, 30, 2]],
   ].freeze
+  MAX_GEMS = 5
 
   attr_reader :col, :row, :directions
   
-  def initialize(i, j, content)
-    @col = i
-    @row = j
-    @center = Vector.new(i * TILE_SIZE + TILE_SIZE / 2, j * TILE_SIZE + TILE_SIZE / 2)
+  def initialize(col, row, content)
+    @col = col
+    @row = row
+    @center = Vector.new(col * TILE_SIZE + TILE_SIZE / 2, row * TILE_SIZE + TILE_SIZE / 2)
 
     dir_mask = content[0].to_i(16)
     @directions = Set.new
@@ -29,15 +30,27 @@ class Tile
     @directions.add(:dn) if (dir_mask & 4) > 0
     @directions.add(:lf) if (dir_mask & 8) > 0
 
+    @props = {
+      gems: []
+    }
+
     gem_count = content[1].to_i
     gem_img = Res.imgs(:board_smallGem, 3, 1)[0]
-    offsets = ELEMENT_OFFSETS[gem_count - 1]
-    @gems = []
-    (0...gem_count).each do |i|
-      x = @center.x + offsets[i][0] - gem_img.width / 2
-      y = @center.y + offsets[i][1] - gem_img.height / 2
-      @gems << Sprite.new(x, y, :board_smallGem, 3, 1)
+    big_gem_img = Res.imgs(:board_bigGem, 3, 1)[0]
+
+    if gem_count > MAX_GEMS
+      x = @center.x - big_gem_img.width / 2
+      y = @center.y - big_gem_img.height / 2
+      @props[:big_gem] = Sprite.new(x, y, :board_bigGem, 3, 1)
+    else
+      offsets = ELEMENT_OFFSETS[gem_count - 1]
+      (0...gem_count).each do |i|
+        x = @center.x + offsets[i][0] - gem_img.width / 2
+        y = @center.y + offsets[i][1] - gem_img.height / 2
+        @props[:gems] << Sprite.new(x, y, :board_smallGem, 3, 1)
+      end
     end
+
     @characters = []
   end
 
@@ -63,7 +76,7 @@ class Tile
   def add_char(char, start = false)
     @characters << char
     char.tile = self
-    char.score += @gems.size
+    char.score += @props[:big_gem] ? 100 : @props[:gems].size
     reposition_chars(start)
   end
 
@@ -73,9 +86,10 @@ class Tile
   end
 
   def update
-    @gems.each do |gem|
+    @props[:gems].each do |gem|
       gem.animate([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 1], 7)
     end
+    @props[:big_gem]&.animate([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 1], 7)
   end
 
   def draw(map)
@@ -96,9 +110,10 @@ class Tile
                            x + 4, y + HALF_TILE - 8, 0xffffff00,
                            x + 4, y + HALF_TILE + 8, 0xffffff00, 3) if @directions.include?(:lf)
 
-    @gems.each_with_index do |gem, i|
-      gem.draw(map, 1, 1, 255, @gem_tint, nil, nil, 4 + (ELEMENT_OFFSETS[@gems.size - 1][i][2] || 0))
+    @props[:gems].each_with_index do |gem, i|
+      gem.draw(map, 1, 1, 255, @gem_tint, nil, nil, 4 + (ELEMENT_OFFSETS[@props[:gems].size - 1][i][2] || 0))
     end
+    @props[:big_gem]&.draw(map, 1, 1, 255, @gem_tint, nil, nil, 4)
   end
 
   private
@@ -107,7 +122,7 @@ class Tile
     offsets = ELEMENT_OFFSETS[@characters.size - 1]
     @characters.each_with_index do |c, i|
       c.send(start ? :set_position : :set_target, @center.x + offsets[i][0], @center.y + offsets[i][1])
-      c.z_offset = offsets[i][2] || 0
+      c.z_offset = (offsets[i][2] || 0) + @row
     end
   end
 end
@@ -119,22 +134,16 @@ class Board
     @font = Res.font(:arialRounded, 36)
 
     File.open("#{Res.prefix}board/#{id}") do |f|
-      f.each_line.with_index do |line, j|
-        line = line.chomp
-        case j
-        when 0
-          @width, @height = line.split(',').map(&:to_i)
-          @tiles = Array.new(@width) do
-            Array.new(@height)
-          end
-        when 1
-          @start_point = line.split(',').map(&:to_i)
-        else
-          (0...line.size / 2).each do |i|
-            row = j - 2
-            @tiles[i][row] = Tile.new(i, row, line[2*i..2*i+1]) if line[2*i] != '.'
-          end
-        end
+      data = f.read.split('|')
+      @width, @height = data[0].split(',').map(&:to_i)
+      @start_col, @start_row = data[1].split(',').map(&:to_i)
+      @tiles = Array.new(@width) do
+        Array.new(@height)
+      end
+      data[2].split(';').each do |t|
+        d = t.split(':')
+        col, row = d[0].split(',').map(&:to_i)
+        @tiles[col][row] = Tile.new(col, row, d[1].split(','))
       end
     end
 
@@ -161,7 +170,7 @@ class Board
 
   def add_character(name)
     @characters << (char = Character.new(name))
-    @tiles[@start_point[0]][@start_point[1]].add_char(char, true)
+    @tiles[@start_col][@start_row].add_char(char, true)
   end
 
   def update
