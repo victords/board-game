@@ -18,7 +18,8 @@ class Tile
 
   attr_reader :col, :row, :directions
   
-  def initialize(col, row, content)
+  def initialize(board, col, row, content)
+    @board = board
     @col = col
     @row = row
     @center = Vector.new(col * TILE_SIZE + TILE_SIZE / 2, row * TILE_SIZE + TILE_SIZE / 2)
@@ -42,6 +43,7 @@ class Tile
       x = @center.x - big_gem_img.width / 2
       y = @center.y - big_gem_img.height / 2
       @props[:big_gem] = Sprite.new(x, y, :board_bigGem, 3, 1)
+      @board.big_gem_count += 1
     else
       offsets = ELEMENT_OFFSETS[gem_count - 1]
       (0...gem_count).each do |i|
@@ -54,7 +56,7 @@ class Tile
     @characters = []
   end
 
-  def set_floor_type(board_id, up, rt, dn, lf)
+  def set_floor_type(up, rt, dn, lf)
     floor_type =
       if up && dn || rt && lf then 0
       elsif dn && !rt && !lf then 1
@@ -66,18 +68,24 @@ class Tile
       elsif up && rt then 7
       else 8
       end
-    @img = Res.imgs("board_floor#{board_id}", 3, 3)[floor_type]
-    @gem_tint = case board_id
+    @img = Res.imgs("board_floor#{@board.id}", 3, 3)[floor_type]
+    @gem_tint = case @board.id
                 when 1 then 0xff5050
                 else        0xffffff
                 end
   end
   
-  def add_char(char, start = false)
+  def add_char(char, end_turn, start = false)
     @characters << char
     char.tile = self
-    char.score += @props[:big_gem] ? 100 : @props[:gems].size
     reposition_chars(start)
+    return unless end_turn
+
+    char.score += @props[:big_gem] ? 100 : @props[:gems].size
+    if @props[:big_gem]
+      @board.big_gem_count -= 1
+      @props[:big_gem] = nil
+    end
   end
 
   def remove_char(char)
@@ -128,10 +136,15 @@ class Tile
 end
 
 class Board
+  attr_reader :id
+  attr_accessor :big_gem_count
+
   def initialize(id)
+    @id = id
     @bg = Res.img("board_bg#{id}")
     @die = Sprite.new(40, 40, :ui_die, 2, 3)
     @font = Res.font(:arialRounded, 36)
+    @big_gem_count = 0
 
     File.open("#{Res.prefix}board/#{id}") do |f|
       data = f.read.split('|')
@@ -143,7 +156,7 @@ class Board
       data[2].split(';').each do |t|
         d = t.split(':')
         col, row = d[0].split(',').map(&:to_i)
-        @tiles[col][row] = Tile.new(col, row, d[1].split(','))
+        @tiles[col][row] = Tile.new(self, col, row, d[1].split(','))
       end
     end
 
@@ -159,7 +172,7 @@ class Board
         rt = i < @tiles.size - 1 && @tiles[i + 1][j]
         dn = j < @tiles[0].size - 1 && @tiles[i][j + 1]
         lf = i > 0 && @tiles[i - 1][j]
-        @tiles[i][j].set_floor_type(id, up, rt, dn, lf)
+        @tiles[i][j].set_floor_type(up, rt, dn, lf)
       end
     end
 
@@ -170,7 +183,7 @@ class Board
 
   def add_character(name)
     @characters << (char = Character.new(name))
-    @tiles[@start_col][@start_row].add_char(char, true)
+    @tiles[@start_col][@start_row].add_char(char, false, true)
   end
 
   def update
@@ -223,6 +236,10 @@ class Board
   end
 
   def change_turn
+    if @big_gem_count.zero?
+      @state = :finished
+      return
+    end
     @char_index += 1
     @char_index = 0 if @char_index >= @characters.size
     @state = :rolling
@@ -231,7 +248,7 @@ class Board
 
   def move_char(char, to)
     char.tile.remove_char(char)
-    to.add_char(char)
+    to.add_char(char, @moves == 1)
     @moves -= 1
   end
 
@@ -254,10 +271,14 @@ class Board
 
     @characters.each_with_index do |c, i|
       c.draw(@map)
-      @font.draw_markup(c.score.to_s, 40 + i * 80, G.window.height - 76, 100, 1, 1, 0xff000000)
+      @font.draw_text(c.score.to_s, 40 + i * 80, G.window.height - 76, 100, 1, 1, 0xff000000)
     end
 
-    @die.draw(nil, 1, 1, 255, 0xffffff, nil, nil, 100)
-    @font.draw_markup('Score', 40, G.window.height - 116, 100, 1, 1, 0xff000000)
+    if @state == :finished
+      @font.draw_text_rel('FINISHED', G.window.width / 2, G.window.height / 2, 100, 0.5, 0.5, 2, 2, 0xff000000)
+    else
+      @die.draw(nil, 1, 1, 255, 0xffffff, nil, nil, 100)
+      @font.draw_text('Score', 40, G.window.height - 116, 100, 1, 1, 0xff000000)
+    end
   end
 end
