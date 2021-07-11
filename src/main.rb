@@ -10,8 +10,12 @@ class MyGameWindow < GameWindow
 
     Res.prefix = "#{File.expand_path(__FILE__).split('/')[0..-3].join('/')}/data"
     @board = Board.new(1)
-    @board.add_character('cat')
-    @board.add_character('rabbit')
+    @board.add_character(:cat)
+    @board.add_character(:rabbit)
+  end
+  
+  def needs_cursor?
+    false
   end
 
   def update

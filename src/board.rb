@@ -161,9 +161,6 @@ class Board
     end
 
     @map = Map.new(TILE_SIZE, TILE_SIZE, @width, @height, G.window.width, G.window.height, false, false)
-    map_size = @map.get_absolute_size
-    @map.set_camera((map_size.x - G.window.width) / 2, (map_size.y - G.window.height) / 2)
-
     @tiles.each_with_index do |col, i|
       col.each_with_index do |tile, j|
         next unless tile
@@ -178,12 +175,17 @@ class Board
 
     @characters = []
     @char_index = 0
+    @labels = []
+    @buttons = []
+    @button_index = 0
+
     @state = :rolling
   end
 
   def add_character(name)
     @characters << (char = Character.new(name))
     @tiles[@start_col][@start_row].add_char(char, false, true)
+    char.start_turn if @characters.size == 1
   end
 
   def update
@@ -194,25 +196,25 @@ class Board
       end
     end
 
+    cur_char = @characters[@char_index]
+    @map.set_camera(cur_char.x + cur_char.w / 2 - G.window.width / 2,
+                    cur_char.y + cur_char.h / 2 - G.window.height / 2)
+
     case @state
     when :rolling
       @die.animate([0, 1, 2, 3, 4, 5], 5)
-      if KB.key_pressed?(Gosu::KB_SPACE)
-        @moves = @die.img_index + 1
-        @state = :moving
-      end
+      next_roll(cur_char) if KB.key_pressed?(Gosu::KB_SPACE)
     when :moving
-      cur_char = @characters[@char_index]
       return if cur_char.moving?
 
-      if @moves == 0
-        change_turn
+      if @moves.zero?
+        next_turn
         return
       end
 
       tile = cur_char.tile
       if tile.directions.empty?
-        change_turn
+        next_turn
       elsif tile.directions.size == 1
         if tile.directions.include?(:up)
           move_char(cur_char, @tiles[tile.col][tile.row - 1])
@@ -232,24 +234,67 @@ class Board
       elsif tile.directions.include?(:lf) && KB.key_pressed?(Gosu::KB_LEFT)
         move_char(cur_char, @tiles[tile.col - 1][tile.row])
       end
+    when :choosing
+      if KB.key_pressed?(Gosu::KB_UP) || KB.key_held?(Gosu::KB_UP)
+        @button_index -= 1
+        @button_index = @buttons.size - 1 if @button_index < 0
+      elsif KB.key_pressed?(Gosu::KB_DOWN) || KB.key_held?(Gosu::KB_DOWN)
+        @button_index += 1
+        @button_index = 0 if @button_index >= @buttons.size
+      elsif KB.key_pressed?(Gosu::KB_SPACE) || KB.key_pressed?(Gosu::KB_RETURN)
+        @buttons[@button_index].click
+      end
     end
   end
 
-  def change_turn
-    if @big_gem_count.zero?
-      @state = :finished
-      return
+  def next_roll(char)
+    rolled = @die.img_index + 1
+    if char.extra_rolls > 0
+      @labels = [
+        Label.new(50, 200, @font, 'Try again?')
+      ]
+      @buttons = [
+        Button.new(50, 250, @font, 'Yes', :ui_button1) {
+          char.extra_rolls -= 1
+          set_state :rolling
+        },
+        Button.new(50, 310, @font, 'No', :ui_button1) {
+          @moves = rolled
+          set_state :moving
+        }
+      ]
+      set_state :choosing
+    else
+      @moves = rolled
+      set_state :moving
     end
-    @char_index += 1
-    @char_index = 0 if @char_index >= @characters.size
-    @state = :rolling
-    @die.set_animation(0)
   end
 
   def move_char(char, to)
     char.tile.remove_char(char)
     to.add_char(char, @moves == 1)
     @moves -= 1
+  end
+
+  def next_turn
+    if @big_gem_count.zero?
+      set_state :finished
+      return
+    end
+    @char_index += 1
+    @char_index = 0 if @char_index >= @characters.size
+    @characters[@char_index].start_turn
+    set_state :rolling
+    @die.set_animation(0)
+  end
+
+  def set_state(state)
+    @state = state
+    if state != :choosing
+      @labels.clear
+      @buttons.clear
+      @button_index = 0
+    end
   end
 
   def draw
@@ -272,6 +317,20 @@ class Board
     @characters.each_with_index do |c, i|
       c.draw(@map)
       @font.draw_text(c.score.to_s, 40 + i * 80, G.window.height - 76, 100, 1, 1, 0xff000000)
+    end
+
+    @labels.each do |l|
+      l.draw(255, 100)
+    end
+    if @buttons.any?
+      @buttons.each do |b|
+        b.draw(255, 100)
+      end
+      b = @buttons[@button_index]
+      G.window.draw_quad(b.x - 5, b.y - 5, 0x80ffff00,
+                         b.x + b.w + 5, b.y - 5, 0x80ffff00,
+                         b.x - 5, b.y + b.h + 5, 0x80ffff00,
+                         b.x + b.w + 5, b.y + b.h + 5, 0x80ffff00, 101)
     end
 
     if @state == :finished

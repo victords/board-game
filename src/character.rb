@@ -9,12 +9,14 @@ class Character < GameObject
   SPEED = 4
 
   attr_writer :z_offset
-  attr_accessor :tile, :score
+  attr_accessor :tile, :score, :extra_rolls
 
   def initialize(name)
     super(0, 0, 128, 128, "char_#{name}", IMAGE_GAPS[name], 2, 1)
+    @name = name
     @score = 0
     @z_offset = 0
+    @extra_rolls = 0
   end
 
   def update
@@ -22,6 +24,13 @@ class Character < GameObject
     if @target
       move_free(@target, 3)
       @target = nil if @speed.x == 0 && @speed.y == 0
+    end
+  end
+
+  def start_turn
+    case @name
+    when :cat
+      @extra_rolls = 1
     end
   end
 
