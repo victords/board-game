@@ -35,6 +35,8 @@ class Character < GameObject
       'Roll die' => proc { @board.set_state :rolling }
     }
 
+    @cooldown -= 1 if @cooldown.positive?
+
     case @name
     when :cat
       @extra_rolls = 1
@@ -45,8 +47,6 @@ class Character < GameObject
           @cooldown = 3
           @board.set_state :rolling
         end
-      else
-        @cooldown -= 1
       end
     end
 

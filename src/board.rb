@@ -206,7 +206,7 @@ class Board
     case @state
     when :rolling
       @die.animate([0, 1, 2, 3, 4, 5], 5)
-      next_roll(cur_char) if KB.key_pressed?(Gosu::KB_SPACE)
+      next_roll(cur_char) if KB.key_pressed?(Gosu::KB_SPACE) || KB.key_pressed?(Gosu::KB_RETURN)
     when :moving
       return if cur_char.moving?
 
