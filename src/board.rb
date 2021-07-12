@@ -143,6 +143,7 @@ class Board
     @id = id
     @bg = Res.img("board_bg#{id}")
     @die = Sprite.new(40, 40, :ui_die, 2, 3)
+    @die_img = Res.imgs(:ui_die, 2, 3)
     @font = Res.font(:arialRounded, 36)
     @big_gem_count = 0
 
@@ -178,14 +179,16 @@ class Board
     @labels = []
     @buttons = []
     @button_index = 0
+    @moves = 0
+    @rolled = []
 
-    @state = :rolling
+    @state = :choosing
   end
 
   def add_character(name)
-    @characters << (char = Character.new(name))
+    @characters << (char = Character.new(self, name))
     @tiles[@start_col][@start_row].add_char(char, false, true)
-    char.start_turn if @characters.size == 1
+    get_options(char) if @characters.size == 1
   end
 
   def update
@@ -249,23 +252,29 @@ class Board
 
   def next_roll(char)
     rolled = @die.img_index + 1
+    @moves += rolled
+    @rolled << rolled
+    @die.x += @die_img[0].width + 20
     if char.extra_rolls > 0
       @labels = [
-        Label.new(50, 200, @font, 'Try again?')
+        Label.new(40, 200, @font, 'Try again?')
       ]
       @buttons = [
-        Button.new(50, 250, @font, 'Yes', :ui_button1) {
+        Button.new(40, 250, @font, 'Yes', :ui_button1) {
+          @moves -= @rolled.pop
+          @die.x -= @die_img[0].width + 20
           char.extra_rolls -= 1
           set_state :rolling
         },
-        Button.new(50, 310, @font, 'No', :ui_button1) {
-          @moves = rolled
+        Button.new(40, 310, @font, 'No', :ui_button1) {
           set_state :moving
         }
       ]
       set_state :choosing
+    elsif char.extra_dice > 0
+      char.extra_dice -= 1
+      set_state :rolling
     else
-      @moves = rolled
       set_state :moving
     end
   end
@@ -283,9 +292,19 @@ class Board
     end
     @char_index += 1
     @char_index = 0 if @char_index >= @characters.size
-    @characters[@char_index].start_turn
-    set_state :rolling
+    @moves = 0
+    @rolled.clear
+    @die.x = 40
     @die.set_animation(0)
+    set_state :choosing
+    get_options(@characters[@char_index])
+  end
+
+  def get_options(char)
+    options = char.start_turn
+    options.each_with_index do |(k, v), i|
+      @buttons << Button.new(40, 20 + i * 60, @font, k, :ui_button1, 0, 0, 0, 0, true, true, 0, 0, nil, nil, nil, nil, 1, 1, nil, &v)
+    end
   end
 
   def set_state(state)
@@ -336,7 +355,10 @@ class Board
     if @state == :finished
       @font.draw_text_rel('FINISHED', G.window.width / 2, G.window.height / 2, 100, 0.5, 0.5, 2, 2, 0xff000000)
     else
-      @die.draw(nil, 1, 1, 255, 0xffffff, nil, nil, 100)
+      @rolled.each_with_index do |n, i|
+        @die_img[n - 1].draw(40 + i * (@die_img[0].width + 20), 40, 100)
+      end
+      @die.draw(nil, 1, 1, 255, 0xffffff, nil, nil, 100) if @state == :rolling
       @font.draw_text('Score', 40, G.window.height - 116, 100, 1, 1, 0xff000000)
     end
   end
