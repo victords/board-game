@@ -3,7 +3,7 @@ include MiniGL
 class Character < GameObject
   IMAGE_GAPS = {
     cat: Vector.new(0, 0),
-    rabbit: Vector.new(0, -14)
+    rabbit: Vector.new(0, -14),
   }.freeze
 
   SPEED = 4
@@ -31,9 +31,7 @@ class Character < GameObject
   end
 
   def start_turn
-    options = {
-      'Roll die' => proc { @board.set_state :rolling }
-    }
+    @board.add_option('Roll die', proc { @board.set_state :rolling })
 
     @cooldown -= 1 if @cooldown.positive?
 
@@ -42,15 +40,15 @@ class Character < GameObject
       @extra_rolls = 1
     when :rabbit
       if @cooldown.zero?
-        options['Ability: + 1 die'] = proc do
+        @board.add_option('Ability: + 1 die', proc {
           @extra_dice = 1
           @cooldown = 3
           @board.set_state :rolling
-        end
+        })
       end
     end
 
-    options
+    @current = true
   end
 
   def set_position(x, y)
@@ -73,7 +71,12 @@ class Character < GameObject
     @speed.x != 0 || @speed.y != 0
   end
 
+  def end_turn
+    @current = false
+  end
+
   def draw(map)
-    super(map, 1, 1, 255, 0xffffff, nil, nil, 9 + @z_offset)
+    alpha = @current ? 255 : 127
+    super(map, 1, 1, alpha, 0xffffff, nil, nil, 9 + @z_offset)
   end
 end

@@ -188,7 +188,7 @@ class Board
   def add_character(name)
     @characters << (char = Character.new(self, name))
     @tiles[@start_col][@start_row].add_char(char, false, true)
-    get_options(char) if @characters.size == 1
+    char.start_turn if @characters.size == 1
   end
 
   def update
@@ -290,6 +290,8 @@ class Board
       set_state :finished
       return
     end
+
+    @characters[@char_index].end_turn
     @char_index += 1
     @char_index = 0 if @char_index >= @characters.size
     @moves = 0
@@ -297,14 +299,13 @@ class Board
     @die.x = 40
     @die.set_animation(0)
     set_state :choosing
-    get_options(@characters[@char_index])
+    @characters[@char_index].start_turn
   end
 
-  def get_options(char)
-    options = char.start_turn
-    options.each_with_index do |(k, v), i|
-      @buttons << Button.new(40, 20 + i * 60, @font, k, :ui_button1, 0, 0, 0, 0, true, true, 0, 0, nil, nil, nil, nil, 1, 1, nil, &v)
-    end
+  def add_option(name, action)
+    @buttons << Button.new(40, 20 + @buttons.size * 60, @font, name, :ui_button1) {
+      action.call
+    }
   end
 
   def set_state(state)
