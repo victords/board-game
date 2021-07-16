@@ -2,7 +2,6 @@ include MiniGL
 
 class Character < GameObject
   IMAGE_GAPS = {
-    cat: Vector.new(0, 0),
     rabbit: Vector.new(0, -14),
   }.freeze
 
@@ -31,8 +30,6 @@ class Character < GameObject
   end
 
   def start_turn
-    @board.add_option('Roll die', proc { @board.set_state :rolling })
-
     @cooldown -= 1 if @cooldown.positive?
 
     case @name
@@ -40,12 +37,13 @@ class Character < GameObject
       @extra_rolls = 1
     when :rabbit
       if @cooldown.zero?
-        @board.add_option('Ability: + 1 die', proc {
+        @board.add_option('Ability: + 1 die') do
           @extra_dice = 1
           @cooldown = 3
-          @board.set_state :rolling
-        })
+        end
       end
+    when :duck
+      @tile.unset_prop(:blocked)
     end
 
     @current = true
@@ -62,13 +60,22 @@ class Character < GameObject
 
   def set_cooldown
     case @name
-    when :rabbit
+    when :rabbit, :duck
       @cooldown = 3
     end
   end
 
   def moving?
     @speed.x != 0 || @speed.y != 0
+  end
+
+  def after_move
+    case @name
+    when :duck
+      @board.add_option('Block path', true) do
+        @tile.set_prop(:blocked)
+      end
+    end
   end
 
   def end_turn

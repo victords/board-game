@@ -5,6 +5,13 @@ include MiniGL
 
 TILE_SIZE = 128
 HALF_TILE = 64
+DIRECTIONS = %i[up rt dn lf].freeze
+DIR_KEYS = {
+  up: Gosu::KB_UP,
+  rt: Gosu::KB_RIGHT,
+  dn: Gosu::KB_DOWN,
+  lf: Gosu::KB_LEFT
+}.freeze
 
 class Tile
   ELEMENT_OFFSETS = [
@@ -91,6 +98,18 @@ class Tile
   def remove_char(char)
     @characters.delete(char)
     reposition_chars
+  end
+
+  def set_prop(prop, value = true)
+    @props[prop] = value
+  end
+
+  def unset_prop(prop)
+    @props.delete(prop)
+  end
+  
+  def is?(flag)
+    @props[flag]
   end
 
   def update
@@ -183,6 +202,7 @@ class Board
     @rolled = []
 
     @state = :choosing
+    add_default_options
   end
 
   def add_character(name)
@@ -211,31 +231,33 @@ class Board
       return if cur_char.moving?
 
       if @moves.zero?
-        next_turn
+        end_move
         return
       end
 
       tile = cur_char.tile
       if tile.directions.empty?
-        next_turn
-      elsif tile.directions.size == 1
-        if tile.directions.include?(:up)
-          move_char(cur_char, @tiles[tile.col][tile.row - 1])
-        elsif tile.directions.include?(:rt)
-          move_char(cur_char, @tiles[tile.col + 1][tile.row])
-        elsif tile.directions.include?(:dn)
-          move_char(cur_char, @tiles[tile.col][tile.row + 1])
-        else # :lf
-          move_char(cur_char, @tiles[tile.col - 1][tile.row])
+        end_move
+      else
+        DIRECTIONS.each do |dir|
+          next unless tile.directions.include?(dir)
+
+          next_tile = case dir
+                      when :up then @tiles[tile.col][tile.row - 1]
+                      when :rt then @tiles[tile.col + 1][tile.row]
+                      when :dn then @tiles[tile.col][tile.row + 1]
+                      else          @tiles[tile.col - 1][tile.row]
+                      end
+          if tile.directions.size == 1
+            if next_tile.is?(:blocked)
+              end_move
+            else
+              move_char(cur_char, next_tile)
+            end
+          elsif KB.key_pressed?(DIR_KEYS[dir]) && !next_tile.is?(:blocked)
+            move_char(cur_char, next_tile)
+          end
         end
-      elsif tile.directions.include?(:up) && KB.key_pressed?(Gosu::KB_UP)
-        move_char(cur_char, @tiles[tile.col][tile.row - 1])
-      elsif tile.directions.include?(:rt) && KB.key_pressed?(Gosu::KB_RIGHT)
-        move_char(cur_char, @tiles[tile.col + 1][tile.row])
-      elsif tile.directions.include?(:dn) && KB.key_pressed?(Gosu::KB_DOWN)
-        move_char(cur_char, @tiles[tile.col][tile.row + 1])
-      elsif tile.directions.include?(:lf) && KB.key_pressed?(Gosu::KB_LEFT)
-        move_char(cur_char, @tiles[tile.col - 1][tile.row])
       end
     when :choosing
       if KB.key_pressed?(Gosu::KB_UP) || KB.key_held?(Gosu::KB_UP)
@@ -256,21 +278,21 @@ class Board
     @rolled << rolled
     @die.x += @die_img[0].width + 20
     if char.extra_rolls > 0
+      set_state :choosing
       @labels = [
         Label.new(40, 200, @font, 'Try again?')
       ]
       @buttons = [
-        Button.new(40, 250, @font, 'Yes', :ui_button1) {
+        Button.new(40, 250, @font, 'Yes', :ui_button1) do
           @moves -= @rolled.pop
           @die.x -= @die_img[0].width + 20
           char.extra_rolls -= 1
           set_state :rolling
-        },
-        Button.new(40, 310, @font, 'No', :ui_button1) {
+        end,
+        Button.new(40, 310, @font, 'No', :ui_button1) do
           set_state :moving
-        }
+        end
       ]
-      set_state :choosing
     elsif char.extra_dice > 0
       char.extra_dice -= 1
       set_state :rolling
@@ -285,6 +307,20 @@ class Board
     @moves -= 1
   end
 
+  def end_move
+    @moves = 0
+    @rolled.clear
+    @die.x = 40
+    @die.set_animation(0)
+    set_state :choosing
+
+    if @characters[@char_index].after_move
+      add_option('Skip', true)
+    else
+      next_turn
+    end
+  end
+
   def next_turn
     if @big_gem_count.zero?
       set_state :finished
@@ -294,27 +330,33 @@ class Board
     @characters[@char_index].end_turn
     @char_index += 1
     @char_index = 0 if @char_index >= @characters.size
-    @moves = 0
-    @rolled.clear
-    @die.x = 40
-    @die.set_animation(0)
     set_state :choosing
+    add_default_options
     @characters[@char_index].start_turn
   end
 
-  def add_option(name, action)
-    @buttons << Button.new(40, 20 + @buttons.size * 60, @font, name, :ui_button1) {
-      action.call
-    }
+  def add_default_options
+    add_option('Roll die') do
+      set_state :rolling
+    end
+  end
+
+  def add_option(name, after_move = false, &action)
+    @buttons << Button.new(40, 20 + @buttons.size * 60, @font, name, :ui_button1) do
+      action&.call
+      if after_move
+        next_turn
+      else
+        set_state :rolling
+      end
+    end
   end
 
   def set_state(state)
     @state = state
-    if state != :choosing
-      @labels.clear
-      @buttons.clear
-      @button_index = 0
-    end
+    @labels.clear
+    @buttons.clear
+    @button_index = 0
   end
 
   def draw

@@ -5,13 +5,15 @@ include MiniGL
 
 class MyGameWindow < GameWindow
   def initialize
-    w, h = `xrandr`.scan(/current (\d+) x (\d+)/).flatten.map(&:to_i)
-    super(w, h)
+    # w, h = `xrandr`.scan(/current (\d+) x (\d+)/).flatten.map(&:to_i)
+    # super(w, h)
+    super(1280, 720, false)
 
     Res.prefix = "#{File.expand_path(__FILE__).split('/')[0..-3].join('/')}/data"
     @board = Board.new(1)
     @board.add_character(:cat)
     @board.add_character(:rabbit)
+    @board.add_character(:duck)
   end
   
   def needs_cursor?
