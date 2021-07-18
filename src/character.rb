@@ -19,6 +19,7 @@ class Character < GameObject
     @extra_rolls = 0
     @extra_dice = 0
     @cooldown = 0
+    @stun = 0
   end
 
   def update
@@ -30,23 +31,28 @@ class Character < GameObject
   end
 
   def start_turn
+    if @stun.positive?
+      @stun -= 1
+      return
+    end
+
+    @current = true
+
     @cooldown -= 1 if @cooldown.positive?
+    return unless @cooldown.zero?
 
     case @name
     when :cat
       @extra_rolls = 1
     when :rabbit
-      if @cooldown.zero?
-        @board.add_option('Ability: + 1 die') do
-          @extra_dice = 1
-          @cooldown = 3
-        end
+      @board.add_option('Ability: + 1 die') do
+        @extra_dice = 1
+        set_cooldown
+        @board.set_state :rolling
       end
     when :duck
       @tile.unset_prop(:blocked)
     end
-
-    @current = true
   end
 
   def set_position(x, y)
@@ -59,21 +65,38 @@ class Character < GameObject
   end
 
   def set_cooldown
-    case @name
-    when :rabbit, :duck
-      @cooldown = 3
-    end
+    @cooldown = 3
+  end
+
+  def stun(turns = 1)
+    @stun = turns
   end
 
   def moving?
     @speed.x != 0 || @speed.y != 0
   end
 
+  def stunned?
+    @stun.positive?
+  end
+
+  def feet
+    Vector.new(@x + @w / 2, @y + @h)
+  end
+
   def after_move
+    return unless @cooldown.zero?
+
     case @name
     when :duck
       @board.add_option('Block path', true) do
         @tile.set_prop(:blocked)
+        set_cooldown
+      end
+    when :panda
+      @board.set_targets(@tile, 2, 'Stun') do |t|
+        t.stun
+        set_cooldown
       end
     end
   end

@@ -23,13 +23,13 @@ class Tile
   ].freeze
   MAX_GEMS = 5
 
-  attr_reader :col, :row, :directions
+  attr_reader :col, :row, :center, :directions, :characters
   
   def initialize(board, col, row, content)
     @board = board
     @col = col
     @row = row
-    @center = Vector.new(col * TILE_SIZE + TILE_SIZE / 2, row * TILE_SIZE + TILE_SIZE / 2)
+    @center = Vector.new(col * TILE_SIZE + HALF_TILE, row * TILE_SIZE + HALF_TILE)
 
     dir_mask = content[0].to_i(16)
     @directions = Set.new
@@ -201,7 +201,7 @@ class Board
     @moves = 0
     @rolled = []
 
-    @state = :choosing
+    @state = :choosing_action
     add_default_options
   end
 
@@ -259,7 +259,7 @@ class Board
           end
         end
       end
-    when :choosing
+    when :choosing_action, :choosing_target
       if KB.key_pressed?(Gosu::KB_UP) || KB.key_held?(Gosu::KB_UP)
         @button_index -= 1
         @button_index = @buttons.size - 1 if @button_index < 0
@@ -278,7 +278,7 @@ class Board
     @rolled << rolled
     @die.x += @die_img[0].width + 20
     if char.extra_rolls > 0
-      set_state :choosing
+      set_state :choosing_action
       @labels = [
         Label.new(40, 200, @font, 'Try again?')
       ]
@@ -312,7 +312,7 @@ class Board
     @rolled.clear
     @die.x = 40
     @die.set_animation(0)
-    set_state :choosing
+    set_state :choosing_action
 
     if @characters[@char_index].after_move
       add_option('Skip', true)
@@ -330,9 +330,15 @@ class Board
     @characters[@char_index].end_turn
     @char_index += 1
     @char_index = 0 if @char_index >= @characters.size
-    set_state :choosing
-    add_default_options
-    @characters[@char_index].start_turn
+
+    if @characters[@char_index].stunned?
+      @characters[@char_index].start_turn
+      next_turn
+    else
+      set_state :choosing_action
+      add_default_options
+      @characters[@char_index].start_turn
+    end
   end
 
   def add_default_options
@@ -341,13 +347,28 @@ class Board
     end
   end
 
-  def add_option(name, after_move = false, &action)
+  def add_option(name, end_turn = false, &action)
     @buttons << Button.new(40, 20 + @buttons.size * 60, @font, name, :ui_button1) do
       action&.call
-      if after_move
-        next_turn
-      else
-        set_state :rolling
+      next_turn if end_turn
+    end
+  end
+  
+  def set_targets(tile, range, label, &action)
+    targets = @tiles.map do |col|
+      col.select { |t| t && t != tile && ((t.col - tile.col).abs + (t.row - tile.row).abs) <= range }.map(&:characters)
+    end.flatten
+    return false if targets.empty?
+
+    add_option(label) do
+      set_state :choosing_target
+      targets.each do |t|
+        x = t.feet.x - 25
+        y = t.feet.y - 25
+        @buttons << Button.new(x: x - @map.cam.x, y: y - @map.cam.y, width: 50, height: 50) do
+          action.call(t)
+          next_turn
+        end
       end
     end
   end
@@ -389,10 +410,11 @@ class Board
         b.draw(255, 100)
       end
       b = @buttons[@button_index]
-      G.window.draw_quad(b.x - 5, b.y - 5, 0x80ffff00,
-                         b.x + b.w + 5, b.y - 5, 0x80ffff00,
-                         b.x - 5, b.y + b.h + 5, 0x80ffff00,
-                         b.x + b.w + 5, b.y + b.h + 5, 0x80ffff00, 101)
+      color = @state == :choosing_action ? 0x80ffff00 : 0x80ff0000
+      G.window.draw_quad(b.x - 5, b.y - 5, color,
+                         b.x + b.w + 5, b.y - 5, color,
+                         b.x - 5, b.y + b.h + 5, color,
+                         b.x + b.w + 5, b.y + b.h + 5, color, 101)
     end
 
     if @state == :finished
