@@ -15,6 +15,7 @@ class MyGameWindow < GameWindow
     @board.add_character(:rabbit)
     @board.add_character(:duck)
     @board.add_character(:panda)
+    @board.add_character(:frog)
   end
   
   def needs_cursor?

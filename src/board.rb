@@ -249,12 +249,12 @@ class Board
                       else          @tiles[tile.col - 1][tile.row]
                       end
           if tile.directions.size == 1
-            if next_tile.is?(:blocked)
+            if tile_blocked?(cur_char, next_tile)
               end_move
             else
               move_char(cur_char, next_tile)
             end
-          elsif KB.key_pressed?(DIR_KEYS[dir]) && !next_tile.is?(:blocked)
+          elsif KB.key_pressed?(DIR_KEYS[dir]) && !tile_blocked?(cur_char, next_tile)
             move_char(cur_char, next_tile)
           end
         end
@@ -277,7 +277,7 @@ class Board
     @moves += rolled
     @rolled << rolled
     @die.x += @die_img[0].width + 20
-    if char.extra_rolls > 0
+    if char.extra_rolls.positive?
       set_state :choosing_action
       @labels = [
         Label.new(40, 200, @font, 'Try again?')
@@ -293,12 +293,16 @@ class Board
           set_state :moving
         end
       ]
-    elsif char.extra_dice > 0
+    elsif char.extra_dice.positive?
       char.extra_dice -= 1
       set_state :rolling
     else
       set_state :moving
     end
+  end
+
+  def tile_blocked?(char, tile)
+    tile.is?(:blocked) && !char.ignore_block?
   end
 
   def move_char(char, to)

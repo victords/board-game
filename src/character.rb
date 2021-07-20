@@ -5,7 +5,7 @@ class Character < GameObject
     rabbit: Vector.new(0, -14),
   }.freeze
 
-  SPEED = 4
+  SPEED = 8
 
   attr_writer :z_offset
   attr_accessor :tile, :score, :extra_rolls, :extra_dice
@@ -25,7 +25,7 @@ class Character < GameObject
   def update
     animate([0, 1], 15)
     if @target
-      move_free(@target, 3)
+      move_free(@target, SPEED)
       @target = nil if @speed.x == 0 && @speed.y == 0
     end
   end
@@ -52,6 +52,8 @@ class Character < GameObject
       end
     when :duck
       @tile.unset_prop(:blocked)
+    when :frog
+      @ignore_block = true
     end
   end
 
@@ -80,6 +82,10 @@ class Character < GameObject
     @stun.positive?
   end
 
+  def ignore_block?
+    @ignore_block
+  end
+
   def feet
     Vector.new(@x + @w / 2, @y + @h)
   end
@@ -106,7 +112,7 @@ class Character < GameObject
   end
 
   def draw(map)
-    alpha = @current ? 255 : 127
+    alpha = @current ? 255 : 204
     super(map, 1, 1, alpha, 0xffffff, nil, nil, 9 + @z_offset)
   end
 end
