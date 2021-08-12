@@ -23,12 +23,14 @@ class Tile
   ].freeze
   MAX_GEMS = 5
 
-  attr_reader :col, :row, :center, :directions, :characters
+  attr_reader :col, :row, :x, :y, :directions, :characters
   
   def initialize(board, col, row, content)
     @board = board
     @col = col
     @row = row
+    @x = col * TILE_SIZE
+    @y = row * TILE_SIZE
     @center = Vector.new(col * TILE_SIZE + HALF_TILE, row * TILE_SIZE + HALF_TILE)
 
     dir_mask = content[0].to_i(16)
@@ -120,8 +122,8 @@ class Tile
   end
 
   def draw(map)
-    x = @col * TILE_SIZE - map.cam.x
-    y = @row * TILE_SIZE - map.cam.y
+    x = @x - map.cam.x
+    y = @y - map.cam.y
     @img.draw(x + 8, y + 8, 1, 1, 1, 0x33000000)
     @img.draw(x, y, 2)
     G.window.draw_triangle(x + HALF_TILE, y - 4, 0xffffff00,
@@ -149,7 +151,7 @@ class Tile
     offsets = ELEMENT_OFFSETS[@characters.size - 1]
     @characters.each_with_index do |c, i|
       c.send(start ? :set_position : :set_target, @center.x + offsets[i][0], @center.y + offsets[i][1])
-      c.z_offset = (offsets[i][2] || 0) + @row
+      c.z_offset = (offsets[i][2] || 0) + @row * 5
     end
   end
 end
@@ -358,18 +360,20 @@ class Board
     end
   end
   
-  def set_targets(tile, range, label, &action)
+  def set_targets(tile, range, label, characters, &action)
     targets = @tiles.map do |col|
-      col.select { |t| t && t != tile && ((t.col - tile.col).abs + (t.row - tile.row).abs) <= range }.map(&:characters)
+      col.select { |t| t && t != tile && ((t.col - tile.col).abs + (t.row - tile.row).abs) <= range }
     end.flatten
+    targets = targets.map(&:characters) if characters
     return false if targets.empty?
 
     add_option(label) do
       set_state :choosing_target
       targets.each do |t|
-        x = t.feet.x - 25
-        y = t.feet.y - 25
-        @buttons << Button.new(x: x - @map.cam.x, y: y - @map.cam.y, width: 50, height: 50) do
+        x = characters ? t.feet.x - 25 : t.x
+        y = characters ? t.feet.y - 25 : t.y
+        size = characters ? 50 : TILE_SIZE
+        @buttons << Button.new(x: x - @map.cam.x, y: y - @map.cam.y, width: size, height: size) do
           action.call(t)
           next_turn
         end
@@ -410,8 +414,14 @@ class Board
       l.draw(255, 100)
     end
     if @buttons.any?
-      @buttons.each do |b|
+      @buttons.each_with_index do |b, i|
         b.draw(255, 100)
+        next unless @state == :choosing_target && i != @button_index
+
+        G.window.draw_quad(b.x, b.y, 0x50ffffff,
+                           b.x + b.w, b.y, 0x50ffffff,
+                           b.x, b.y + b.h, 0x50ffffff,
+                           b.x + b.w, b.y + b.h, 0x50ffffff, 101)
       end
       b = @buttons[@button_index]
       color = @state == :choosing_action ? 0x80ffff00 : 0x80ff0000

@@ -3,6 +3,7 @@ include MiniGL
 class Character < GameObject
   IMAGE_GAPS = {
     rabbit: Vector.new(0, -14),
+    shark: Vector.new(0, -16)
   }.freeze
 
   SPEED = 8
@@ -100,8 +101,14 @@ class Character < GameObject
         set_cooldown
       end
     when :panda
-      @board.set_targets(@tile, 2, 'Stun') do |t|
+      @board.set_targets(@tile, 2, 'Stun', true) do |t|
         t.stun
+        set_cooldown
+      end
+    when :shark
+      @board.set_targets(@tile, 2, 'Warp', false) do |t|
+        @tile.remove_char(self)
+        t.add_char(self, true)
         set_cooldown
       end
     end
