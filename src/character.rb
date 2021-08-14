@@ -7,6 +7,7 @@ class Character < GameObject
   }.freeze
 
   SPEED = 8
+  FEET_OFFSET = 20
 
   attr_writer :z_offset
   attr_accessor :tile, :score, :extra_rolls, :extra_dice
@@ -21,6 +22,8 @@ class Character < GameObject
     @extra_dice = 0
     @cooldown = 0
     @stun = 0
+
+    @ignore_block = name == :frog
   end
 
   def update
@@ -53,8 +56,6 @@ class Character < GameObject
       end
     when :duck
       @tile.unset_prop(:blocked)
-    when :frog
-      @ignore_block = true
     end
   end
 
@@ -64,7 +65,7 @@ class Character < GameObject
   end
 
   def set_target(x, y)
-    @target = Vector.new(x - @w / 2, y - @h)
+    @target = Vector.new(x - @w / 2, y + FEET_OFFSET - @h)
   end
 
   def set_cooldown
@@ -88,7 +89,7 @@ class Character < GameObject
   end
 
   def feet
-    Vector.new(@x + @w / 2, @y + @h)
+    Vector.new(@x + @w / 2, @y + @h - FEET_OFFSET)
   end
 
   def after_move
@@ -110,6 +111,16 @@ class Character < GameObject
         @tile.remove_char(self)
         t.add_char(self, true)
         set_cooldown
+      end
+    when :alligator
+      @board.set_targets(@tile, 1, 'Steal', true) do |t|
+        @board.roll_die do |value|
+          value = t.score if t.score < value
+          @score += value
+          t.score -= value
+          @board.next_turn
+        end
+        false
       end
     end
   end

@@ -12,8 +12,10 @@ class MyGameWindow < GameWindow
     Res.prefix = "#{File.expand_path(__FILE__).split('/')[0..-3].join('/')}/data"
     @board = Board.new(1)
     @board.add_character(:shark)
-    @board.add_character(:cat)
-    @board.add_character(:rabbit)
+    @board.add_character(:duck)
+    @board.add_character(:panda)
+    @board.add_character(:alligator)
+    @board.add_character(:frog)
   end
 
   def needs_cursor?

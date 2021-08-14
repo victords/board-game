@@ -228,7 +228,14 @@ class Board
     case @state
     when :rolling
       @die.animate([0, 1, 2, 3, 4, 5], 5)
-      next_roll(cur_char) if KB.key_pressed?(Gosu::KB_SPACE) || KB.key_pressed?(Gosu::KB_RETURN)
+      if KB.key_pressed?(Gosu::KB_SPACE) || KB.key_pressed?(Gosu::KB_RETURN)
+        if @roll_callback
+          @roll_callback.call(@die.img_index + 1)
+          @roll_callback = nil
+        else
+          next_roll(cur_char)
+        end
+      end
     when :moving
       return if cur_char.moving?
 
@@ -364,7 +371,7 @@ class Board
     targets = @tiles.map do |col|
       col.select { |t| t && t != tile && ((t.col - tile.col).abs + (t.row - tile.row).abs) <= range }
     end.flatten
-    targets = targets.map(&:characters) if characters
+    targets = targets.map(&:characters).flatten if characters
     return false if targets.empty?
 
     add_option(label) do
@@ -374,11 +381,15 @@ class Board
         y = characters ? t.feet.y - 25 : t.y
         size = characters ? 50 : TILE_SIZE
         @buttons << Button.new(x: x - @map.cam.x, y: y - @map.cam.y, width: size, height: size) do
-          action.call(t)
-          next_turn
+          next_turn if action.call(t)
         end
       end
     end
+  end
+
+  def roll_die(&callback)
+    @roll_callback = callback
+    set_state :rolling
   end
 
   def set_state(state)
